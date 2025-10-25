@@ -341,7 +341,7 @@ def simulate_nonlinear(system, x0, u_sequence, dt):
     return np.array(t_trajectory), np.array(x_trajectory).T
 
 
-def plot_results(t, x_opt, x_linear, x_nonlinear, u_opt, x_target, test_name):
+def plot_results(t, x_opt, x_linear, x_nonlinear, u_opt, x_target, L_cable, test_name):
     """
     Plot optimization results and simulation comparison
     
@@ -352,6 +352,7 @@ def plot_results(t, x_opt, x_linear, x_nonlinear, u_opt, x_target, test_name):
         x_nonlinear: Simulated non-linear system trajectory
         u_opt: Optimal control input
         x_target: Target state
+        L_cable: Cable length (m)
         test_name: Name for the test case
     """
     fig, axes = plt.subplots(5, 1, figsize=(12, 14))
@@ -410,10 +411,10 @@ def plot_results(t, x_opt, x_linear, x_nonlinear, u_opt, x_target, test_name):
     fig2, ax = plt.subplots(1, 1, figsize=(12, 6))
     
     # Calculate load position
-    x_load_opt = x_opt[0, :] + L_CABLE * np.sin(x_opt[2, :])
-    x_load_linear = x_linear[0, :] + L_CABLE * np.sin(x_linear[2, :])
-    x_load_nonlinear = x_nonlinear[0, :] + L_CABLE * np.sin(x_nonlinear[2, :])
-    x_load_target = x_target[0] + L_CABLE * np.sin(x_target[2])
+    x_load_opt = x_opt[0, :] + L_cable * np.sin(x_opt[2, :])
+    x_load_linear = x_linear[0, :] + L_cable * np.sin(x_linear[2, :])
+    x_load_nonlinear = x_nonlinear[0, :] + L_cable * np.sin(x_nonlinear[2, :])
+    x_load_target = x_target[0] + L_cable * np.sin(x_target[2])
     
     ax.plot(t, x_load_opt, 'b-', label='MPC Optimal', linewidth=2)
     ax.plot(t, x_load_linear, 'g--', label='Linear Model', linewidth=1.5)
@@ -509,7 +510,7 @@ def run_test_case(system, Ad, Bd, x0, x_load_target, test_name, Q_state, Q_load,
     print(f"  Mean |acceleration|: {np.mean(np.abs(u_opt)):.2f} m/s²")
     
     # Plot results
-    plot_results(t, x_opt, x_linear, x_nonlinear, u_opt, x_target, test_name)
+    plot_results(t, x_opt, x_linear, x_nonlinear, u_opt, x_target, system.L, test_name)
 
 
 def main():
