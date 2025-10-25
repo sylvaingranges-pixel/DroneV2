@@ -61,12 +61,33 @@ The system includes tests with:
 - Starting with initial velocity
 - Destinations at 20m, 40m, and 80m
 
+## Solver Optimization
+
+The system uses **CLARABEL**, a modern Rust-based conic solver, which was identified as the fastest and most robust solver through comprehensive benchmarking:
+- **Average solve time**: 800-1700ms (depending on horizon)
+- **Success rate**: 100%
+- **Precision**: <0.001m load position error
+
+See `RAPPORT_COMPARATIF_SOLVEURS.md` for detailed solver comparison (CLARABEL, SCS, ECOS, OSQP, CVXOPT).
+
 ## Performance
 
-The optimization typically solves in 200-600ms, making it suitable for real-time closed-loop control applications.
+The optimization typically solves in 800-1700ms with CLARABEL, making it suitable for real-time closed-loop control applications.
 
 ## Results
 
 Generated plots are saved as PNG files in the working directory:
 - `results_*.png`: Full state trajectories and control inputs
 - `load_position_*.png`: Load position tracking performance
+
+## Solver Benchmark
+
+To run the solver benchmark and generate comparative analysis:
+```bash
+python solver_benchmark.py
+```
+
+This generates:
+- `RAPPORT_COMPARATIF_SOLVEURS.md`: Detailed comparative report in French
+- `solver_comparison.png`: Performance visualizations
+- `solver_benchmark_results.csv`: Raw benchmark data

@@ -136,3 +136,47 @@ Pour le contrôle MPC du drone, un solveur rapide et robuste est essentiel pour 
 
 ---
 *Rapport généré automatiquement le 2025-10-25 à 08:21:43*
+
+---
+
+## Annexe: Détails Techniques
+
+### Configuration du Problème
+
+Le problème d'optimisation MPC est formulé comme un programme quadratique (QP) avec:
+- **Variables**: 404 (pour horizon=100) à 804 (pour horizon=200)
+- **Contraintes**: ~600-1200 contraintes linéaires
+- **Type**: Problème convexe quadratique avec contraintes d'inégalité
+
+### Critères d'Évaluation
+
+1. **Rapidité**: Temps total de résolution (ms)
+2. **Robustesse**: Pourcentage de problèmes résolus avec succès
+3. **Précision**: Erreur de position finale de la charge (m)
+4. **Scalabilité**: Variation du temps selon la taille du problème
+
+### Méthodologie
+
+- Chaque test répété 3 fois pour fiabilité statistique
+- 4 cas de test différents (horizons 100-200, conditions initiales variées)
+- Mêmes paramètres de tolérance pour tous les solveurs (1e-4)
+- Limites d'itérations augmentées (100000) pour comparaison équitable
+
+### Recommandations d'Utilisation
+
+**Pour l'implémentation actuelle:**
+```python
+# Dans drone_control_1d.py, ligne 255-257
+problem.solve(solver=cp.CLARABEL, verbose=False, max_iter=100000, 
+             tol_gap_abs=1e-4, tol_gap_rel=1e-4)
+```
+
+**Pour contrôle en temps réel:**
+- Utiliser CLARABEL comme solveur principal
+- Horizon adaptatif: 50-100 étapes pour problèmes rapides
+- Re-calcul toutes les 1-2 secondes en boucle fermée
+- Monitoring du temps de calcul pour détecter problèmes
+
+**En cas d'échec de CLARABEL:**
+- Fallback vers SCS (très fiable, légèrement plus lent)
+- Éviter CVXOPT (trop lent et instable pour ce problème)
