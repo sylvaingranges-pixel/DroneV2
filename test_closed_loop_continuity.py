@@ -9,6 +9,7 @@ This script compares:
 
 import numpy as np
 import matplotlib.pyplot as plt
+import os
 from drone_control_1d import (
     DroneSystem, MPCController, TS,
     simulate_closed_loop, simulate_nonlinear
@@ -206,9 +207,9 @@ def plot_comparison(t_ol, x_ol, u_ol, t_no, x_no, u_no, t_yes, x_yes, u_yes,
     axes[0].set_xlim([0, max(t_u_ol[-1], t_u_no[-1], t_u_yes[-1])])
     
     # Control rate comparison
-    u_rate_ol = np.diff(u_ol[0, :]) / 0.1
-    u_rate_no = np.diff(u_no[0, :]) / 0.1
-    u_rate_yes = np.diff(u_yes[0, :]) / 0.1
+    u_rate_ol = np.diff(u_ol[0, :]) / TS
+    u_rate_no = np.diff(u_no[0, :]) / TS
+    u_rate_yes = np.diff(u_yes[0, :]) / TS
     
     t_rate_ol = t_u_ol[:-1]
     t_rate_no = t_u_no[:-1]
@@ -261,7 +262,8 @@ def plot_comparison(t_ol, x_ol, u_ol, t_no, x_no, u_no, t_yes, x_yes, u_yes,
     axes[3].set_xlim([0, max(t_ol[-1], t_no[-1], t_yes[-1])])
     
     plt.tight_layout()
-    plt.savefig('/home/runner/work/DroneV2/DroneV2/comparison_strategies.png', 
+    output_dir = os.getcwd()
+    plt.savefig(os.path.join(output_dir, 'comparison_strategies.png'), 
                 dpi=150, bbox_inches='tight')
     print("\nSaved comparison plot: comparison_strategies.png")
     
@@ -312,7 +314,7 @@ def plot_comparison(t_ol, x_ol, u_ol, t_no, x_no, u_no, t_yes, x_yes, u_yes,
         axes2[1].axvline(t_recalc, color='gray', linestyle=':', alpha=0.3, linewidth=1)
     
     plt.tight_layout()
-    plt.savefig('/home/runner/work/DroneV2/DroneV2/comparison_zoom_jumps.png',
+    plt.savefig(os.path.join(output_dir, 'comparison_zoom_jumps.png'),
                 dpi=150, bbox_inches='tight')
     print("Saved zoomed comparison plot: comparison_zoom_jumps.png")
     
