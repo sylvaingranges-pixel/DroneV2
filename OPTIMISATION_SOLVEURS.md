@@ -12,9 +12,9 @@ Identifier et implémenter le meilleur solveur CVXPY pour maximiser la **rapidit
 
 ✅ **CLARABEL** sélectionné comme solveur optimal
 
-**Amélioration de performance: -35% temps de calcul**
-- Avant (SCS): ~1300ms moyenne
-- Après (CLARABEL): ~1180ms moyenne
+**Amélioration des performances: -9% temps de calcul moyen**
+- Avant (SCS): ~1304ms moyenne
+- Après (CLARABEL): ~1181ms moyenne
 - Précision maintenue: <0.001m erreur
 - Robustesse maintenue: 100% taux de succès
 
@@ -134,22 +134,22 @@ pandas>=2.0.0
 
 | Test Case | SCS (avant) | CLARABEL (après) | Gain |
 |-----------|-------------|------------------|------|
-| test_20m_repos | 927 ms | **807 ms** | **-13%** |
-| test_40m_repos | 1410 ms | **1269 ms** | **-10%** |
-| test_80m_repos | 2037 ms | **1703 ms** | **-16%** |
-| test_40m_vitesse | 1403 ms | **1200 ms** | **-14%** |
+| test_20m_repos | ~835 ms | **765 ms** | **-8%** |
+| test_40m_repos | ~1230 ms | **1150 ms** | **-7%** |
+| test_80m_repos | ~1921 ms | **1657 ms** | **-14%** |
+| test_40m_vitesse | ~1230 ms | **1157 ms** | **-6%** |
 
-**Gain moyen: -13.5%** (amélioration de 13-16% selon le cas)
+**Gain moyen: -9%** (amélioration de 6-14% selon le cas)
 
 ### Impact pour Contrôle Temps Réel
 
 Avec un horizon de 100 étapes:
-- **Avant**: 927ms → Re-calcul toutes les ~1s
-- **Après**: 807ms → Re-calcul toutes les 0.8s
-- **Bénéfice**: +25% fréquence de mise à jour possible
+- **Avant**: ~835ms → Re-calcul toutes les ~0.8s
+- **Après**: ~765ms → Re-calcul toutes les ~0.75s
+- **Bénéfice**: Réactivité légèrement améliorée
 
 Pour contrôle en boucle fermée:
-- ✅ Re-calcul sous la seconde maintenant possible
+- ✅ Re-calcul sous la seconde maintenu
 - ✅ Réactivité améliorée face aux perturbations
 - ✅ Plus de marge pour traitement additionnel (estimation d'état, etc.)
 
@@ -163,10 +163,11 @@ Pour contrôle en boucle fermée:
    - Implémentation moderne en Rust (performance native)
    - Algorithme de splitting conique optimisé
    - Gestion mémoire efficace
+   - 9% plus rapide en moyenne que SCS
 
 2. **Robustesse**
    - 100% taux de succès sur tous les tests
-   - Pas de problèmes d'infeasabilité
+   - Pas de problèmes d'infeasibilité
    - Convergence stable
 
 3. **Scalabilité**
@@ -324,7 +325,7 @@ Les graphiques montrent clairement:
 
 ### Résumé des Apports
 
-✅ **Performance**: +35% réduction temps de calcul
+✅ **Performance**: ~9% réduction temps de calcul moyen
 ✅ **Robustesse**: 100% taux de succès maintenu
 ✅ **Précision**: <0.001m erreur maintenue
 ✅ **Documentation**: Rapport complet et reproductible
@@ -341,7 +342,7 @@ Les graphiques montrent clairement:
 ### Recommandation Finale
 
 **CLARABEL est le choix optimal** pour ce problème de contrôle MPC:
-- Gain de performance significatif (-35%)
+- Gain de performance significatif (~9% en moyenne, jusqu'à 14% sur grands horizons)
 - Robustesse et précision préservées
 - Scalabilité excellente pour problèmes plus grands
 - Solution moderne et maintenue
