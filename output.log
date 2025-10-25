@@ -1,0 +1,233 @@
+/home/runner/.local/lib/python3.12/site-packages/cvxpy/problems/problem.py:167: UserWarning: Objective contains too many subexpressions. Consider vectorizing your CVXPY code to speed up compilation.
+  warnings.warn("Objective contains too many subexpressions. "
+============================================================
+1D Drone Control System with Suspended Load
+============================================================
+
+System Parameters:
+  Drone mass: 40.0 kg
+  Load mass: 24.0 kg
+  Cable length: 19.0 m
+  Load surface area: 0.2 m²
+  Drag coefficient: 1.0
+  Sampling time: 0.1 s
+
+Linearizing system around equilibrium...
+
+Continuous-time system matrices:
+A =
+[[ 0.          1.          0.          0.        ]
+ [ 0.          0.          0.          0.        ]
+ [ 0.          0.          0.          1.        ]
+ [ 0.          0.         -0.51631579  0.        ]]
+
+B =
+[[ 0.        ]
+ [ 1.        ]
+ [ 0.        ]
+ [-0.05263158]]
+
+Discretizing with dt = 0.1 s...
+
+Discrete-time system matrices:
+Ad =
+[[ 1.          0.1         0.          0.        ]
+ [ 0.          1.          0.          0.        ]
+ [ 0.          0.          0.99741953  0.09991397]
+ [ 0.          0.         -0.05158716  0.99741953]]
+
+Bd =
+[[ 0.005     ]
+ [ 0.1       ]
+ [-0.00026304]
+ [-0.00525863]]
+
+============================================================
+Test Case: test_20m_at_rest
+============================================================
+Initial state: x_d=0.0m, v_d=0.0m/s, theta=0.00deg, omega=0.000rad/s
+Initial load position: 0.0m
+Target load position: 20.0m
+Horizon: 100 steps (10.0 seconds)
+Optimization solved in 844.20 ms
+
+Final errors (at end of horizon):
+  Linear model:
+    Position error: 0.2027 m
+    Velocity error: 0.0325 m/s
+    Angle error: 0.5820 deg
+    Angular velocity error: 0.012983 rad/s
+  Non-linear model:
+    Position error: 0.2027 m
+    Velocity error: 0.0325 m/s
+    Angle error: 5.2080 deg
+    Angular velocity error: 0.236273 rad/s
+
+Load position errors:
+  Linear model: 0.0097 m
+  Non-linear model: 1.5220 m
+
+Control statistics:
+  Max acceleration: 15.00 m/s²
+  Mean |acceleration|: 8.86 m/s²
+Saved plot: results_test_20m_at_rest.png
+Saved plot: load_position_test_20m_at_rest.png
+
+============================================================
+Test Case: test_40m_at_rest
+============================================================
+Initial state: x_d=0.0m, v_d=0.0m/s, theta=0.00deg, omega=0.000rad/s
+Initial load position: 0.0m
+Target load position: 40.0m
+Horizon: 150 steps (15.0 seconds)
+Optimization solved in 1351.00 ms
+
+Final errors (at end of horizon):
+  Linear model:
+    Position error: 0.0383 m
+    Velocity error: 0.0055 m/s
+    Angle error: 0.1812 deg
+    Angular velocity error: 0.000338 rad/s
+  Non-linear model:
+    Position error: 0.0383 m
+    Velocity error: 0.0055 m/s
+    Angle error: 40.6371 deg
+    Angular velocity error: 0.330174 rad/s
+
+Load position errors:
+  Linear model: 0.0218 m
+  Non-linear model: 12.4124 m
+
+Control statistics:
+  Max acceleration: 15.00 m/s²
+  Mean |acceleration|: 8.09 m/s²
+Saved plot: results_test_40m_at_rest.png
+Saved plot: load_position_test_40m_at_rest.png
+
+============================================================
+Test Case: test_80m_at_rest
+============================================================
+Initial state: x_d=0.0m, v_d=0.0m/s, theta=0.00deg, omega=0.000rad/s
+Initial load position: 0.0m
+Target load position: 80.0m
+Horizon: 200 steps (20.0 seconds)
+Optimization solved in 1841.07 ms
+
+Final errors (at end of horizon):
+  Linear model:
+    Position error: 0.0120 m
+    Velocity error: 0.0008 m/s
+    Angle error: 0.1717 deg
+    Angular velocity error: 0.006296 rad/s
+  Non-linear model:
+    Position error: 0.0120 m
+    Velocity error: 0.0008 m/s
+    Angle error: 433.1417 deg
+    Angular velocity error: 1.074155 rad/s
+
+Load position errors:
+  Linear model: 0.0690 m
+  Non-linear model: 18.1714 m
+
+Control statistics:
+  Max acceleration: 15.00 m/s²
+  Mean |acceleration|: 8.03 m/s²
+Saved plot: results_test_80m_at_rest.png
+Saved plot: load_position_test_80m_at_rest.png
+
+============================================================
+Test Case: test_20m_with_velocity
+============================================================
+Initial state: x_d=0.0m, v_d=2.0m/s, theta=5.73deg, omega=0.000rad/s
+Initial load position: 1.9m
+Target load position: 20.0m
+Horizon: 100 steps (10.0 seconds)
+Optimization solved in 933.69 ms
+
+Final errors (at end of horizon):
+  Linear model:
+    Position error: 0.0819 m
+    Velocity error: 0.0135 m/s
+    Angle error: 0.3981 deg
+    Angular velocity error: 0.024228 rad/s
+  Non-linear model:
+    Position error: 0.0819 m
+    Velocity error: 0.0135 m/s
+    Angle error: 1.7906 deg
+    Angular velocity error: 0.148078 rad/s
+
+Load position errors:
+  Linear model: 0.0501 m
+  Non-linear model: 0.6756 m
+
+Control statistics:
+  Max acceleration: 15.00 m/s²
+  Mean |acceleration|: 7.79 m/s²
+Saved plot: results_test_20m_with_velocity.png
+Saved plot: load_position_test_20m_with_velocity.png
+
+============================================================
+Test Case: test_40m_with_velocity
+============================================================
+Initial state: x_d=0.0m, v_d=3.0m/s, theta=8.59deg, omega=0.050rad/s
+Initial load position: 2.8m
+Target load position: 40.0m
+Horizon: 150 steps (15.0 seconds)
+Optimization solved in 1360.70 ms
+
+Final errors (at end of horizon):
+  Linear model:
+    Position error: 0.0382 m
+    Velocity error: 0.0015 m/s
+    Angle error: 0.3778 deg
+    Angular velocity error: 0.004859 rad/s
+  Non-linear model:
+    Position error: 0.0382 m
+    Velocity error: 0.0015 m/s
+    Angle error: 6.0750 deg
+    Angular velocity error: 0.348427 rad/s
+
+Load position errors:
+  Linear model: 0.1635 m
+  Non-linear model: 2.0490 m
+
+Control statistics:
+  Max acceleration: 15.00 m/s²
+  Mean |acceleration|: 7.40 m/s²
+Saved plot: results_test_40m_with_velocity.png
+Saved plot: load_position_test_40m_with_velocity.png
+
+============================================================
+Test Case: test_80m_with_velocity
+============================================================
+Initial state: x_d=0.0m, v_d=4.0m/s, theta=11.46deg, omega=0.100rad/s
+Initial load position: 3.8m
+Target load position: 80.0m
+Horizon: 200 steps (20.0 seconds)
+Optimization solved in 1912.24 ms
+
+Final errors (at end of horizon):
+  Linear model:
+    Position error: 0.0053 m
+    Velocity error: 0.0014 m/s
+    Angle error: 0.1508 deg
+    Angular velocity error: 0.002614 rad/s
+  Non-linear model:
+    Position error: 0.0053 m
+    Velocity error: 0.0014 m/s
+    Angle error: 412.3468 deg
+    Angular velocity error: 1.122639 rad/s
+
+Load position errors:
+  Linear model: 0.0447 m
+  Non-linear model: 15.0481 m
+
+Control statistics:
+  Max acceleration: 15.00 m/s²
+  Mean |acceleration|: 7.59 m/s²
+Saved plot: results_test_80m_with_velocity.png
+Saved plot: load_position_test_80m_with_velocity.png
+
+============================================================
+All test cases completed successfully!
+============================================================
