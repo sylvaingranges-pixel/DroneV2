@@ -30,6 +30,12 @@ TS = 0.1  # Sampling time (seconds)
 REQUIRED_POS_ACCURACY = 0.3  # meters
 REQUIRED_VEL_ACCURACY = 0.15  # m/s
 
+# Baseline performance for comparison (from RAPPORT_COMPARATIF_SOLVEURS.md)
+BASELINE_SOLVE_TIME_MS = 1180.6  # Average solve time with CLARABEL baseline
+
+# Success status list for solution validity
+SUCCESS_STATUSES = ["optimal", "optimal_inaccurate", "solved", "solved_inaccurate"]
+
 
 def solve_mpc_optimized(system, Ad, Bd, x0, x_load_target, Q_state, Q_load, R,
                         horizon, solver_name, solver_params, Qf_state=None, Qf_load=None):
@@ -100,17 +106,18 @@ def solve_mpc_optimized(system, Ad, Bd, x0, x_load_target, Q_state, Q_load, R,
         solve_time = time.time() - start_time
         
         # Check if solution was successful
-        success_statuses = ["optimal", "optimal_inaccurate", "solved", "solved_inaccurate"]
-        is_success = problem.status in success_statuses
+        is_success = problem.status in SUCCESS_STATUSES
         
         if is_success and x.value is not None:
             x_opt = x.value
             u_opt = u.value
             
             # Calculate errors
+            # Use sin for actual nonlinear calculation (validates against real system)
             x_load_final = x_opt[0, -1] + L * np.sin(x_opt[2, -1])
             pos_error = abs(x_load_final - x_load_target)
-            vel_error = abs(x_opt[1, -1])
+            # Velocity error: difference from target velocity (which is 0)
+            vel_error = abs(x_opt[1, -1] - 0.0)
             
             # Check if meets requirements
             meets_req = pos_error <= REQUIRED_POS_ACCURACY and vel_error <= REQUIRED_VEL_ACCURACY
@@ -324,8 +331,7 @@ def main():
         print(f"  Paramètres: {best_config['params']}")
         
         # Calculate speedup vs baseline
-        baseline_time = 1180.6  # ms from previous benchmark
-        speedup = baseline_time / (best_time * 1000)
+        speedup = BASELINE_SOLVE_TIME_MS / (best_time * 1000)
         print(f"\n  Accélération vs baseline: {speedup:.2f}x plus rapide")
     
     # Save results

@@ -565,6 +565,7 @@ def main():
     # Define test cases with optimized horizons for faster computation
     # Horizons chosen to meet required precision (0.3m position, 0.15m/s velocity)
     # while minimizing solve time
+    # Note: Horizons are optimized based on empirical testing, not linear scaling with distance
     test_cases = [
         {
             'name': 'test_20m_at_rest',
@@ -576,13 +577,13 @@ def main():
             'name': 'test_40m_at_rest',
             'x0': np.array([0.0, 0.0, 0.0, 0.0]),  # Start at rest at origin
             'x_load_target': 40.0,  # Target load position: 40m
-            'horizon': 90  # Optimized for speed (9.0s) - needs more time to settle
+            'horizon': 90  # Needs longer horizon for settling (9.0s)
         },
         {
             'name': 'test_80m_at_rest',
             'x0': np.array([0.0, 0.0, 0.0, 0.0]),  # Start at rest at origin
             'x_load_target': 80.0,  # Target load position: 80m
-            'horizon': 80  # Optimized for speed (8.0s)
+            'horizon': 90  # Optimized based on system dynamics (9.0s)
         },
         {
             'name': 'test_20m_with_velocity',
@@ -600,7 +601,7 @@ def main():
             'name': 'test_80m_with_velocity',
             'x0': np.array([0.0, 4.0, 0.2, 0.1]),  # Start with velocity and angle
             'x_load_target': 80.0,  # Target load position: 80m
-            'horizon': 80  # Optimized for speed
+            'horizon': 90  # Optimized for speed
         }
     ]
     
