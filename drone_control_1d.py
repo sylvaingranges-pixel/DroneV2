@@ -153,17 +153,19 @@ class DroneSystem:
 class MPCController:
     """Model Predictive Controller for drone system"""
     
-    def __init__(self, Ad, Bd, horizon=50):
+    def __init__(self, Ad, Bd, L_cable, horizon=50):
         """
         Initialize MPC controller
         
         Args:
             Ad: Discrete state matrix
             Bd: Discrete input matrix
+            L_cable: Cable length (m)
             horizon: Prediction horizon
         """
         self.Ad = Ad
         self.Bd = Bd
+        self.L = L_cable
         self.N = horizon  # prediction horizon
         self.nx = Ad.shape[0]  # number of states
         self.nu = Bd.shape[1]  # number of inputs
@@ -172,24 +174,28 @@ class MPCController:
         self.u_max = 15.0  # Maximum acceleration (m/s^2)
         self.u_min = -15.0  # Minimum acceleration (m/s^2)
         
-    def solve(self, x0, x_target, Q, R, Qf=None):
+    def solve(self, x0, x_load_target, Q_state, Q_load, R, Qf_state=None, Qf_load=None):
         """
-        Solve MPC optimization problem
+        Solve MPC optimization problem with focus on load position
         
         Args:
-            x0: Initial state
-            x_target: Target state
-            Q: State cost matrix
-            R: Input cost matrix
-            Qf: Terminal state cost matrix (default: Q)
+            x0: Initial state [x_d, v_d, theta, omega]
+            x_load_target: Target load position (scalar)
+            Q_state: State cost weights [q_xd, q_vd, q_theta, q_omega]
+            Q_load: Weight for load position error
+            R: Input cost weight
+            Qf_state: Terminal state cost weights
+            Qf_load: Terminal load position cost weight
             
         Returns:
             u_opt: Optimal control sequence
             x_opt: Optimal state trajectory
             solve_time: Time to solve optimization
         """
-        if Qf is None:
-            Qf = Q * 50  # Much higher terminal cost to ensure convergence
+        if Qf_state is None:
+            Qf_state = Q_state * 50
+        if Qf_load is None:
+            Qf_load = Q_load * 100
         
         # Define optimization variables
         x = cp.Variable((self.nx, self.N + 1))
@@ -202,14 +208,27 @@ class MPCController:
         # Initial condition
         constraints.append(x[:, 0] == x0)
         
+        # Compute target state (drone position for load at target)
+        x_drone_target = x_load_target  # When theta=0, x_load = x_drone
+        x_target = np.array([x_drone_target, 0.0, 0.0, 0.0])
+        
         # Stage costs and dynamics constraints
         for k in range(self.N):
-            # State deviation from target
+            # State tracking cost
             dx = x[:, k] - x_target
-            cost += cp.quad_form(dx, Q)
+            cost += Q_state[0] * dx[0]**2  # drone position
+            cost += Q_state[1] * dx[1]**2  # drone velocity
+            cost += Q_state[2] * dx[2]**2  # angle
+            cost += Q_state[3] * dx[3]**2  # angular velocity
+            
+            # Load position cost
+            # For linearized model: sin(theta) ≈ theta (small angle approximation)
+            # x_load = x_d + L*sin(theta) ≈ x_d + L*theta
+            x_load = x[0, k] + self.L * x[2, k]  # Linear approximation
+            cost += Q_load * (x_load - x_load_target)**2
             
             # Control effort
-            cost += cp.quad_form(u[:, k], R)
+            cost += R * u[0, k]**2
             
             # Dynamics constraint
             constraints.append(x[:, k + 1] == self.Ad @ x[:, k] + self.Bd @ u[:, k])
@@ -218,19 +237,23 @@ class MPCController:
             constraints.append(u[:, k] <= self.u_max)
             constraints.append(u[:, k] >= self.u_min)
         
-        # Terminal cost
+        # Terminal cost - state
         dx_f = x[:, self.N] - x_target
-        cost += cp.quad_form(dx_f, Qf)
+        cost += Qf_state[0] * dx_f[0]**2
+        cost += Qf_state[1] * dx_f[1]**2
+        cost += Qf_state[2] * dx_f[2]**2
+        cost += Qf_state[3] * dx_f[3]**2
         
-        # Terminal constraint (soft - via high terminal cost)
-        # For hard constraint, uncomment:
-        # constraints.append(x[:, self.N] == x_target)
+        # Terminal cost - load position (using small angle approximation)
+        x_load_f = x[0, self.N] + self.L * x[2, self.N]  # Linear approximation
+        cost += Qf_load * (x_load_f - x_load_target)**2
         
         # Solve optimization problem
         problem = cp.Problem(cp.Minimize(cost), constraints)
         
         start_time = time.time()
-        problem.solve(solver=cp.OSQP, verbose=False, max_iter=10000, eps_abs=1e-5, eps_rel=1e-5)
+        # Use SCS solver which is more robust for larger problems
+        problem.solve(solver=cp.SCS, verbose=False, max_iters=10000, eps=1e-4)
         solve_time = time.time() - start_time
         
         if problem.status not in ["optimal", "optimal_inaccurate"]:
@@ -407,7 +430,7 @@ def plot_results(t, x_opt, x_linear, x_nonlinear, u_opt, x_target, test_name):
     print(f"Saved plot: load_position_{test_name}.png")
 
 
-def run_test_case(system, Ad, Bd, x0, x_target, test_name, Q_weights, R_weight, horizon=50):
+def run_test_case(system, Ad, Bd, x0, x_load_target, test_name, Q_state, Q_load, R_weight, horizon=50):
     """
     Run a single test case
     
@@ -415,29 +438,30 @@ def run_test_case(system, Ad, Bd, x0, x_target, test_name, Q_weights, R_weight, 
         system: DroneSystem object
         Ad, Bd: Discrete system matrices
         x0: Initial state
-        x_target: Target state
+        x_load_target: Target load position (scalar)
         test_name: Name for this test
-        Q_weights: State weights for cost function
+        Q_state: State weights for cost function [q_xd, q_vd, q_theta, q_omega]
+        Q_load: Weight for load position error
         R_weight: Input weight for cost function
         horizon: MPC horizon
     """
     print(f"\n{'='*60}")
     print(f"Test Case: {test_name}")
     print(f"{'='*60}")
+    
+    # Calculate initial load position
+    x_load_init = x0[0] + system.L * np.sin(x0[2])
+    
     print(f"Initial state: x_d={x0[0]:.1f}m, v_d={x0[1]:.1f}m/s, theta={np.rad2deg(x0[2]):.2f}deg, omega={x0[3]:.3f}rad/s")
-    print(f"Target state: x_d={x_target[0]:.1f}m, v_d={x_target[1]:.1f}m/s, theta={np.rad2deg(x_target[2]):.2f}deg, omega={x_target[3]:.3f}rad/s")
+    print(f"Initial load position: {x_load_init:.1f}m")
+    print(f"Target load position: {x_load_target:.1f}m")
     print(f"Horizon: {horizon} steps ({horizon*TS:.1f} seconds)")
     
-    # Setup cost matrices
-    Q = np.diag(Q_weights)
-    R = np.diag([R_weight])
-    Qf = Q * 20  # Higher terminal cost to ensure convergence
-    
     # Create MPC controller
-    controller = MPCController(Ad, Bd, horizon=horizon)
+    controller = MPCController(Ad, Bd, system.L, horizon=horizon)
     
     # Solve MPC
-    u_opt, x_opt, solve_time = controller.solve(x0, x_target, Q, R, Qf)
+    u_opt, x_opt, solve_time = controller.solve(x0, x_load_target, Q_state, Q_load, R_weight)
     
     if u_opt is None:
         print("ERROR: Optimization failed!")
@@ -454,6 +478,9 @@ def run_test_case(system, Ad, Bd, x0, x_target, test_name, Q_weights, R_weight, 
     # Time vector for plotting
     t = np.linspace(0, horizon * TS, horizon + 1)
     
+    # Target state (drone at target with load directly below)
+    x_target = np.array([x_load_target, 0.0, 0.0, 0.0])
+    
     # Calculate final errors
     print("\nFinal errors (at end of horizon):")
     print("  Linear model:")
@@ -469,9 +496,8 @@ def run_test_case(system, Ad, Bd, x0, x_target, test_name, Q_weights, R_weight, 
     print(f"    Angular velocity error: {abs(x_nonlinear[3, -1] - x_target[3]):.6f} rad/s")
     
     # Calculate load position error
-    x_load_target = x_target[0] + L_CABLE * np.sin(x_target[2])
-    x_load_linear_final = x_linear[0, -1] + L_CABLE * np.sin(x_linear[2, -1])
-    x_load_nonlinear_final = x_nonlinear[0, -1] + L_CABLE * np.sin(x_nonlinear[2, -1])
+    x_load_linear_final = x_linear[0, -1] + system.L * np.sin(x_linear[2, -1])
+    x_load_nonlinear_final = x_nonlinear[0, -1] + system.L * np.sin(x_nonlinear[2, -1])
     
     print(f"\nLoad position errors:")
     print(f"  Linear model: {abs(x_load_linear_final - x_load_target):.4f} m")
@@ -525,49 +551,49 @@ def main():
     print(Bd)
     
     # Cost function weights
-    # Higher weights mean tighter tracking
-    # Position, velocity, angle, angular velocity
-    # Important: Higher position weight helps avoid overshoot
+    # Q_state: [drone position, drone velocity, cable angle, angular velocity]
     # Higher angle and angular velocity weights help dampen oscillations
-    Q_weights = [200.0, 50.0, 500.0, 100.0]  # Penalize position, velocity, angle, angular velocity
-    R_weight = 1.0  # Higher penalty on control effort to smooth trajectory and avoid overshoot
+    # Lower drone position weight since we focus on load position
+    Q_state = np.array([10.0, 20.0, 500.0, 100.0])  # State tracking weights
+    Q_load = 1000.0  # High weight on load position - this is the primary objective
+    R_weight = 2.0  # Control effort penalty to smooth trajectory and avoid overshoot
     
     # Define test cases with longer horizons to ensure the load settles
     test_cases = [
         {
             'name': 'test_20m_at_rest',
             'x0': np.array([0.0, 0.0, 0.0, 0.0]),  # Start at rest at origin
-            'x_target': np.array([20.0, 0.0, 0.0, 0.0]),  # Target: 20m, at rest
+            'x_load_target': 20.0,  # Target load position: 20m
             'horizon': 100  # Longer horizon to ensure settling
         },
         {
             'name': 'test_40m_at_rest',
             'x0': np.array([0.0, 0.0, 0.0, 0.0]),  # Start at rest at origin
-            'x_target': np.array([40.0, 0.0, 0.0, 0.0]),  # Target: 40m, at rest
+            'x_load_target': 40.0,  # Target load position: 40m
             'horizon': 150  # Longer horizon to ensure settling
         },
         {
             'name': 'test_80m_at_rest',
             'x0': np.array([0.0, 0.0, 0.0, 0.0]),  # Start at rest at origin
-            'x_target': np.array([80.0, 0.0, 0.0, 0.0]),  # Target: 80m, at rest
+            'x_load_target': 80.0,  # Target load position: 80m
             'horizon': 200  # Longer horizon to ensure settling
         },
         {
             'name': 'test_20m_with_velocity',
             'x0': np.array([0.0, 2.0, 0.1, 0.0]),  # Start with velocity and angle
-            'x_target': np.array([20.0, 0.0, 0.0, 0.0]),  # Target: 20m, at rest
+            'x_load_target': 20.0,  # Target load position: 20m
             'horizon': 100
         },
         {
             'name': 'test_40m_with_velocity',
             'x0': np.array([0.0, 3.0, 0.15, 0.05]),  # Start with velocity and angle
-            'x_target': np.array([40.0, 0.0, 0.0, 0.0]),  # Target: 40m, at rest
+            'x_load_target': 40.0,  # Target load position: 40m
             'horizon': 150
         },
         {
             'name': 'test_80m_with_velocity',
             'x0': np.array([0.0, 4.0, 0.2, 0.1]),  # Start with velocity and angle
-            'x_target': np.array([80.0, 0.0, 0.0, 0.0]),  # Target: 80m, at rest
+            'x_load_target': 80.0,  # Target load position: 80m
             'horizon': 200
         }
     ]
@@ -576,9 +602,9 @@ def main():
     for test in test_cases:
         run_test_case(
             system, Ad, Bd,
-            test['x0'], test['x_target'],
+            test['x0'], test['x_load_target'],
             test['name'],
-            Q_weights, R_weight,
+            Q_state, Q_load, R_weight,
             horizon=test['horizon']
         )
     
