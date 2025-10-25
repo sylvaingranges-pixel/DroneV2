@@ -52,6 +52,18 @@ pip install -r requirements.txt
 
 ## Usage
 
+### Quick Start
+
+For a simple example, run:
+
+```bash
+python quick_example.py
+```
+
+This demonstrates a basic trajectory from rest to 30m target position.
+
+### Full Test Suite
+
 Run the main script to execute all test scenarios:
 
 ```bash
@@ -82,8 +94,11 @@ The controller successfully:
 ## Files
 
 - `drone_control.py`: Main implementation with all models, controller, and test scenarios
+- `quick_example.py`: Simple example script for quick start
 - `requirements.txt`: Python dependencies
+- `view_results.html`: Interactive HTML viewer for results
 - `result_plot_*.png`: Generated plots (not committed to git)
+- `IMPLEMENTATION_SUMMARY.md`: Detailed results and performance analysis
 
 ## Next Steps
 

@@ -28,6 +28,9 @@ wheels/
 *.jpg
 *.pdf
 
+# HTML viewer (keep in repo)
+!view_results.html
+
 # IDE
 .vscode/
 .idea/
