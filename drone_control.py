@@ -58,6 +58,11 @@ class DroneLoadSystem:
         # Derived parameters
         self.k_drag = 0.5 * self.rho * self.Cd * self.S  # drag coefficient
         
+        # Horizon scaling parameters for optimization
+        self.HORIZON_BASE_DISTANCE = 20.0  # m - reference distance for horizon scaling
+        self.HORIZON_STEPS_PER_REF = 50    # steps per reference distance
+        self.HORIZON_MIN_STEPS = 50        # minimum horizon length
+        
     def nonlinear_dynamics(self, t, state, u_func):
         """
         Non-linear dynamics with air drag.
@@ -74,6 +79,9 @@ class DroneLoadSystem:
         a_d = u
         
         # Load position and velocity in inertial frame
+        # The load hangs at angle theta from vertical, so:
+        # x_l = x_d + L*sin(theta) (horizontal position in inertial frame)
+        # v_l = v_d + L*omega*cos(theta) (horizontal velocity, differentiated from x_l)
         x_l = x_d + self.L * np.sin(theta)
         v_l = v_d + self.L * omega * np.cos(theta)
         
@@ -213,9 +221,9 @@ class OptimalController:
         x_load_init = x0[0] + self.system.L * np.sin(x0[2])
         distance = abs(x_load_target - x_load_init)
         
-        # Scale horizon based on distance (rough estimate: need ~5s per 20m)
-        # Use at least 100 steps, scale up for longer distances
-        N_min = int(distance / 20.0 * 50) + 50
+        # Scale horizon based on distance
+        # Horizon increases with distance to give enough time for the maneuver
+        N_min = int(distance / self.system.HORIZON_BASE_DISTANCE * self.system.HORIZON_STEPS_PER_REF) + self.system.HORIZON_MIN_STEPS
         N = max(self.N_default, N_min)
         
         n_states = 4
@@ -608,8 +616,11 @@ def main():
     print(f"\nOptimization is fast enough for closed-loop control at {system.Ts}s sample time.")
     
     # Save all figures
+    import os
+    output_dir = os.path.dirname(os.path.abspath(__file__))
     for i, fig in enumerate(figures):
-        fig.savefig(f'/home/runner/work/DroneV2/DroneV2/result_plot_{i+1}.png', dpi=150, bbox_inches='tight')
+        output_path = os.path.join(output_dir, f'result_plot_{i+1}.png')
+        fig.savefig(output_path, dpi=150, bbox_inches='tight')
     
     print(f"\nSaved {len(figures)} plots as result_plot_1.png to result_plot_{len(figures)}.png")
     
