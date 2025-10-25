@@ -207,9 +207,11 @@ class MPCController:
         
         # Warm start if previous solution provided
         if u_warmstart is not None and x_warmstart is not None:
-            # Shift previous solution and use as initial guess
-            x.value = x_warmstart
-            u.value = u_warmstart
+            # Check if dimensions match, otherwise skip warm-start
+            if u_warmstart.shape[1] == self.N and x_warmstart.shape[1] == self.N + 1:
+                # Shift previous solution and use as initial guess
+                x.value = x_warmstart
+                u.value = u_warmstart
         
         # Cost function
         cost = 0
