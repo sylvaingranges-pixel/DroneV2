@@ -252,11 +252,13 @@ class MPCController:
         problem = cp.Problem(cp.Minimize(cost), constraints)
         
         start_time = time.time()
-        # Use SCS solver which is more robust for larger problems
-        problem.solve(solver=cp.SCS, verbose=False, max_iters=10000, eps=1e-4)
+        # Use CLARABEL solver - fastest and most robust based on benchmark
+        # (see RAPPORT_COMPARATIF_SOLVEURS.md for detailed comparison)
+        problem.solve(solver=cp.CLARABEL, verbose=False, max_iter=100000, 
+                     tol_gap_abs=1e-4, tol_gap_rel=1e-4)
         solve_time = time.time() - start_time
         
-        if problem.status not in ["optimal", "optimal_inaccurate"]:
+        if problem.status not in ["optimal", "optimal_inaccurate", "solved", "solved_inaccurate"]:
             print(f"Warning: Optimization status: {problem.status}")
             return None, None, solve_time
         
