@@ -63,16 +63,31 @@ The system includes tests with:
 
 ## Solver Optimization
 
-The system uses **CLARABEL**, a modern Rust-based conic solver, which was identified as the fastest and most robust solver through comprehensive benchmarking:
-- **Average solve time**: 800-1700ms (depending on horizon)
+The system uses **SCS (Splitting Conic Solver)** with optimized parameters for fast computation:
+- **Solver**: SCS with relaxed tolerances (`eps=1e-2`)
+- **Average solve time**: 330-495ms (2.0-2.5x faster than baseline)
+- **Horizons**: Optimized 50-70 steps (vs 100-200 previously)
+- **Precision**: Meets requirements (0.3m position, 0.15m/s velocity)
 - **Success rate**: 100%
-- **Precision**: <0.001m load position error
 
-See `RAPPORT_COMPARATIF_SOLVEURS.md` for detailed solver comparison (CLARABEL, SCS, ECOS, OSQP, CVXOPT).
+### Performance Optimization
+The optimization strategy combines:
+1. **Relaxed tolerances** from 1e-4 to 1e-2 (sufficient for required precision)
+2. **Shorter horizons** adapted to target distance (50-70 vs 100-200 steps)
+3. **SCS solver** more efficient than CLARABEL for this configuration
+
+See `OPTIMISATION_PERFORMANCES.md` for detailed optimization analysis.
+
+### Solver Comparison
+Previous benchmarking identified CLARABEL as optimal for high precision:
+- See `RAPPORT_COMPARATIF_SOLVEURS.md` for comparison (CLARABEL, SCS, ECOS, OSQP, CVXOPT)
+
+Current configuration prioritizes speed while maintaining required precision:
+- See `optimization_benchmark.py` for speed-optimized comparison
 
 ## Performance
 
-The optimization typically solves in 800-1700ms with CLARABEL, making it suitable for real-time closed-loop control applications.
+The optimization now solves in **330-495ms**, making it highly suitable for real-time closed-loop control at 2-3 Hz update rate.
 
 ## Results
 
