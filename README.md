@@ -98,7 +98,8 @@ Example results for 20m target from rest:
 The system uses **CLARABEL**, a modern Rust-based conic solver, which was identified as the fastest and most robust solver through comprehensive benchmarking:
 - **Average solve time**: 400-1100ms (depending on horizon)
 - **Success rate**: 100%
-- **Precision**: <0.1m load position error
+- **Closed-loop precision**: <0.1m final load position error
+- **Open-loop precision**: 0.5-12m final load position error (depends on horizon and initial conditions)
 
 See `RAPPORT_COMPARATIF_SOLVEURS.md` for detailed solver comparison (CLARABEL, SCS, ECOS, OSQP, CVXOPT).
 
