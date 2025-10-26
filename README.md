@@ -68,6 +68,8 @@ This notebook provides:
 - **Predefined scenario**: Initial conditions (position=0m, velocity=10m/s, load angle=-30°, angular velocity=0) with target load position at 10m
 - **Visual comparison**: side-by-side plots of linear and non-linear system responses
 
+See [NOTEBOOK_GUIDE.md](NOTEBOOK_GUIDE.md) for detailed usage instructions and parameter tuning guide.
+
 ### Basic Open-Loop MPC
 
 Run the main simulation:
