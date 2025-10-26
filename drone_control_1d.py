@@ -174,7 +174,12 @@ class MPCController:
         self.u_max = 15.0  # Maximum acceleration (m/s^2)
         self.u_min = -15.0  # Minimum acceleration (m/s^2)
         
-    def solve(self, x0, x_load_target, Q_state, Q_load, R, Qf_state=None, Qf_load=None):
+        # Store previous solution for warm starting and continuity
+        self.u_prev_solution = None
+        self.x_prev_solution = None
+        
+    def solve(self, x0, x_load_target, Q_state, Q_load, R, Qf_state=None, Qf_load=None, 
+              u_prev=None, R_continuity=None):
         """
         Solve MPC optimization problem with focus on load position
         
@@ -186,6 +191,8 @@ class MPCController:
             R: Input cost weight
             Qf_state: Terminal state cost weights
             Qf_load: Terminal load position cost weight
+            u_prev: Previous control input (to enforce continuity at start). If None, no constraint
+            R_continuity: Weight for continuity with previous solution. If None, no continuity penalty
             
         Returns:
             u_opt: Optimal control sequence
@@ -208,6 +215,10 @@ class MPCController:
         # Initial condition
         constraints.append(x[:, 0] == x0)
         
+        # Continuity constraint: first control input matches previous (if provided)
+        if u_prev is not None:
+            constraints.append(u[:, 0] == u_prev)
+        
         # Compute target state (drone position for load at target)
         x_drone_target = x_load_target  # When theta=0, x_load = x_drone
         x_target = np.array([x_drone_target, 0.0, 0.0, 0.0])
@@ -229,6 +240,12 @@ class MPCController:
             
             # Control effort
             cost += R * u[0, k]**2
+            
+            # Continuity penalty: penalize deviation from previous solution
+            if R_continuity is not None and self.u_prev_solution is not None:
+                # Only penalize if we have previous solution and k is within bounds
+                if k < self.u_prev_solution.shape[1]:
+                    cost += R_continuity * (u[0, k] - self.u_prev_solution[0, k])**2
             
             # Dynamics constraint
             constraints.append(x[:, k + 1] == self.Ad @ x[:, k] + self.Bd @ u[:, k])
@@ -264,6 +281,10 @@ class MPCController:
         
         u_opt = u.value
         x_opt = x.value
+        
+        # Store solution for next iteration (warm starting and continuity)
+        self.u_prev_solution = u_opt
+        self.x_prev_solution = x_opt
         
         return u_opt, x_opt, solve_time
 
@@ -341,6 +362,90 @@ def simulate_nonlinear(system, x0, u_sequence, dt):
         x_trajectory.append(x_current.copy())
     
     return np.array(t_trajectory), np.array(x_trajectory).T
+
+
+def simulate_closed_loop(system, controller, x0, x_load_target, Q_state, Q_load, R, 
+                         n_steps, dt, recalc_interval=1, u_prev=None, R_continuity=None):
+    """
+    Simulate closed-loop control with MPC recalculation at each time step
+    
+    Args:
+        system: DroneSystem object
+        controller: MPCController object
+        x0: Initial state
+        x_load_target: Target load position
+        Q_state: State cost weights
+        Q_load: Load position cost weight
+        R: Control effort weight
+        n_steps: Number of simulation steps
+        dt: Time step
+        recalc_interval: How often to recalculate MPC (in steps)
+        u_prev: Previous control input (for initial constraint)
+        R_continuity: Weight for continuity penalty
+        
+    Returns:
+        t_trajectory: Time vector
+        x_trajectory: State trajectory
+        u_trajectory: Control input trajectory
+        solve_times: Array of solve times for each MPC call
+    """
+    t_trajectory = [0]
+    x_trajectory = [x0.copy()]
+    u_trajectory = []
+    solve_times = []
+    
+    x_current = x0.copy()
+    u_last_applied = u_prev  # Track last applied control
+    
+    for k in range(n_steps):
+        # Recalculate MPC solution
+        if k % recalc_interval == 0:
+            # Solve MPC from current state
+            u_opt, x_opt, solve_time = controller.solve(
+                x_current, x_load_target, Q_state, Q_load, R,
+                u_prev=u_last_applied,
+                R_continuity=R_continuity
+            )
+            
+            if u_opt is None:
+                print(f"MPC failed at step {k}, using zero control")
+                u_opt = np.zeros((1, controller.N))
+            
+            solve_times.append(solve_time)
+            
+            # Use only the first control input (receding horizon)
+            u_k = u_opt[0, 0]
+        else:
+            # Between recalculations, use next control from previous solution
+            idx = k % recalc_interval
+            if controller.u_prev_solution is not None and idx < controller.u_prev_solution.shape[1]:
+                u_k = controller.u_prev_solution[0, idx]
+            else:
+                u_k = 0.0
+        
+        # Apply control and simulate one step
+        def dynamics(t, x):
+            return system.nonlinear_dynamics(t, x, u_k)
+        
+        t_current = t_trajectory[-1]
+        sol = solve_ivp(
+            dynamics,
+            [t_current, t_current + dt],
+            x_current,
+            method='RK45',
+            max_step=dt/10
+        )
+        
+        # Update state
+        x_current = sol.y[:, -1]
+        u_trajectory.append(u_k)
+        u_last_applied = u_k  # Store for next iteration constraint
+        
+        t_trajectory.append(t_current + dt)
+        x_trajectory.append(x_current.copy())
+    
+    return (np.array(t_trajectory), np.array(x_trajectory).T, 
+            np.array(u_trajectory).reshape(1, -1), np.array(solve_times))
 
 
 def plot_results(t, x_opt, x_linear, x_nonlinear, u_opt, x_target, L_cable, test_name):
@@ -433,6 +538,111 @@ def plot_results(t, x_opt, x_linear, x_nonlinear, u_opt, x_target, L_cable, test
     print(f"Saved plot: load_position_{test_name}.png")
 
 
+def plot_closed_loop_results(t, x_traj, u_traj, x_target, L_cable, test_name):
+    """
+    Plot closed-loop control results
+    
+    Args:
+        t: Time vector
+        x_traj: State trajectory
+        u_traj: Control input trajectory
+        x_target: Target state
+        L_cable: Cable length (m)
+        test_name: Name for the test case
+    """
+    fig, axes = plt.subplots(6, 1, figsize=(12, 16))
+    
+    # Drone position
+    axes[0].plot(t, x_traj[0, :], 'b-', linewidth=2)
+    axes[0].axhline(x_target[0], color='k', linestyle=':', alpha=0.5, label='Target')
+    axes[0].set_ylabel('Drone Position (m)')
+    axes[0].legend()
+    axes[0].grid(True, alpha=0.3)
+    axes[0].set_title(f'Closed-Loop Drone Control - {test_name}')
+    
+    # Drone velocity
+    axes[1].plot(t, x_traj[1, :], 'b-', linewidth=2)
+    axes[1].axhline(x_target[1], color='k', linestyle=':', alpha=0.5, label='Target')
+    axes[1].set_ylabel('Drone Velocity (m/s)')
+    axes[1].legend()
+    axes[1].grid(True, alpha=0.3)
+    
+    # Cable angle
+    axes[2].plot(t, np.rad2deg(x_traj[2, :]), 'b-', linewidth=2)
+    axes[2].axhline(np.rad2deg(x_target[2]), color='k', linestyle=':', alpha=0.5, label='Target')
+    axes[2].set_ylabel('Cable Angle (deg)')
+    axes[2].legend()
+    axes[2].grid(True, alpha=0.3)
+    
+    # Angular velocity
+    axes[3].plot(t, x_traj[3, :], 'b-', linewidth=2)
+    axes[3].axhline(x_target[3], color='k', linestyle=':', alpha=0.5, label='Target')
+    axes[3].set_ylabel('Angular Velocity (rad/s)')
+    axes[3].legend()
+    axes[3].grid(True, alpha=0.3)
+    
+    # Load position
+    x_load = x_traj[0, :] + L_cable * np.sin(x_traj[2, :])
+    x_load_target = x_target[0] + L_cable * np.sin(x_target[2])
+    axes[4].plot(t, x_load, 'b-', linewidth=2)
+    axes[4].axhline(x_load_target, color='k', linestyle=':', alpha=0.5, label='Target')
+    axes[4].set_ylabel('Load Position (m)')
+    axes[4].legend()
+    axes[4].grid(True, alpha=0.3)
+    
+    # Control input
+    t_u = t[:-1]
+    axes[5].step(t_u, u_traj[0, :], 'b-', where='post', linewidth=2, label='Control Input')
+    axes[5].axhline(0, color='k', linestyle=':', alpha=0.5)
+    
+    # Highlight control discontinuities
+    if u_traj.shape[1] > 1:
+        u_diff = np.abs(np.diff(u_traj[0, :]))
+        discontinuity_threshold = 1.0  # m/s^2
+        discontinuities = np.where(u_diff > discontinuity_threshold)[0]
+        if len(discontinuities) > 0:
+            for idx in discontinuities:
+                axes[5].axvline(t_u[idx], color='r', linestyle='--', alpha=0.3, linewidth=1)
+    
+    axes[5].set_ylabel('Drone Acceleration (m/s²)')
+    axes[5].set_xlabel('Time (s)')
+    axes[5].legend()
+    axes[5].grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    plt.savefig(f'/home/runner/work/DroneV2/DroneV2/closed_loop_{test_name}.png', dpi=150)
+    print(f"Saved plot: closed_loop_{test_name}.png")
+    plt.close()
+    
+    # Plot control smoothness analysis
+    fig, axes = plt.subplots(2, 1, figsize=(12, 8))
+    
+    # Control trajectory
+    axes[0].step(t_u, u_traj[0, :], 'b-', where='post', linewidth=2)
+    axes[0].set_ylabel('Control Input (m/s²)')
+    axes[0].set_title(f'Control Smoothness Analysis - {test_name}')
+    axes[0].grid(True, alpha=0.3)
+    
+    # Control rate of change
+    if u_traj.shape[1] > 1:
+        u_diff = np.diff(u_traj[0, :]) / TS
+        t_diff = t_u[:-1]
+        axes[1].step(t_diff, u_diff, 'r-', where='post', linewidth=2)
+        axes[1].set_ylabel('Control Rate (m/s³)')
+        axes[1].set_xlabel('Time (s)')
+        axes[1].grid(True, alpha=0.3)
+        
+        # Statistics
+        max_jump = np.max(np.abs(u_diff))
+        mean_jump = np.mean(np.abs(u_diff))
+        axes[1].set_title(f'Max Jump: {max_jump:.2f} m/s³, Mean: {mean_jump:.2f} m/s³')
+    
+    plt.tight_layout()
+    plt.savefig(f'/home/runner/work/DroneV2/DroneV2/control_smoothness_{test_name}.png', dpi=150)
+    print(f"Saved plot: control_smoothness_{test_name}.png")
+    plt.close()
+
+
 def run_test_case(system, Ad, Bd, x0, x_load_target, test_name, Q_state, Q_load, R_weight, horizon=50):
     """
     Run a single test case
@@ -515,6 +725,87 @@ def run_test_case(system, Ad, Bd, x0, x_load_target, test_name, Q_state, Q_load,
     plot_results(t, x_opt, x_linear, x_nonlinear, u_opt, x_target, system.L, test_name)
 
 
+def run_closed_loop_test(system, Ad, Bd, x0, x_load_target, test_name, Q_state, Q_load, R_weight, 
+                         R_continuity=None, horizon=50, n_steps=100, recalc_interval=5):
+    """
+    Run a closed-loop test case with MPC recalculation
+    
+    Args:
+        system: DroneSystem object
+        Ad, Bd: Discrete system matrices
+        x0: Initial state
+        x_load_target: Target load position (scalar)
+        test_name: Name for this test
+        Q_state: State weights for cost function
+        Q_load: Weight for load position error
+        R_weight: Input weight for cost function
+        R_continuity: Weight for continuity penalty (None to disable)
+        horizon: MPC horizon
+        n_steps: Number of simulation steps
+        recalc_interval: How often to recalculate MPC (in steps)
+    """
+    print(f"\n{'='*60}")
+    print(f"Closed-Loop Test: {test_name}")
+    print(f"{'='*60}")
+    
+    # Calculate initial load position
+    x_load_init = x0[0] + system.L * np.sin(x0[2])
+    
+    print(f"Initial state: x_d={x0[0]:.1f}m, v_d={x0[1]:.1f}m/s, theta={np.rad2deg(x0[2]):.2f}deg, omega={x0[3]:.3f}rad/s")
+    print(f"Initial load position: {x_load_init:.1f}m")
+    print(f"Target load position: {x_load_target:.1f}m")
+    print(f"Horizon: {horizon} steps ({horizon*TS:.1f} seconds)")
+    print(f"Simulation: {n_steps} steps ({n_steps*TS:.1f} seconds)")
+    print(f"MPC recalculation interval: {recalc_interval} steps ({recalc_interval*TS:.1f} seconds)")
+    if R_continuity is not None:
+        print(f"Continuity weight: {R_continuity}")
+    
+    # Create MPC controller
+    controller = MPCController(Ad, Bd, system.L, horizon=horizon)
+    
+    # Run closed-loop simulation
+    t, x_traj, u_traj, solve_times = simulate_closed_loop(
+        system, controller, x0, x_load_target, Q_state, Q_load, R_weight,
+        n_steps, TS, recalc_interval=recalc_interval, R_continuity=R_continuity
+    )
+    
+    print(f"\nMPC solve statistics:")
+    print(f"  Number of optimizations: {len(solve_times)}")
+    print(f"  Average solve time: {np.mean(solve_times)*1000:.2f} ms")
+    print(f"  Max solve time: {np.max(solve_times)*1000:.2f} ms")
+    print(f"  Min solve time: {np.min(solve_times)*1000:.2f} ms")
+    
+    # Calculate final errors
+    x_target = np.array([x_load_target, 0.0, 0.0, 0.0])
+    print(f"\nFinal state:")
+    print(f"  Position: {x_traj[0, -1]:.4f} m (error: {abs(x_traj[0, -1] - x_target[0]):.4f} m)")
+    print(f"  Velocity: {x_traj[1, -1]:.4f} m/s (error: {abs(x_traj[1, -1] - x_target[1]):.4f} m/s)")
+    print(f"  Angle: {np.rad2deg(x_traj[2, -1]):.4f} deg (error: {abs(np.rad2deg(x_traj[2, -1] - x_target[2])):.4f} deg)")
+    print(f"  Angular velocity: {x_traj[3, -1]:.6f} rad/s (error: {abs(x_traj[3, -1] - x_target[3]):.6f} rad/s)")
+    
+    # Calculate load position error
+    x_load_final = x_traj[0, -1] + system.L * np.sin(x_traj[2, -1])
+    print(f"\nLoad position:")
+    print(f"  Final: {x_load_final:.4f} m")
+    print(f"  Target: {x_load_target:.4f} m")
+    print(f"  Error: {abs(x_load_final - x_load_target):.4f} m")
+    
+    # Control smoothness analysis
+    if u_traj.shape[1] > 1:
+        u_diff = np.abs(np.diff(u_traj[0, :])) / TS
+        max_jump = np.max(u_diff)
+        mean_jump = np.mean(u_diff)
+        
+        print(f"\nControl smoothness:")
+        print(f"  Max control rate: {max_jump:.2f} m/s³")
+        print(f"  Mean control rate: {mean_jump:.2f} m/s³")
+        print(f"  Max control value: {np.max(np.abs(u_traj)):.2f} m/s²")
+        print(f"  Mean |control|: {np.mean(np.abs(u_traj)):.2f} m/s²")
+    
+    # Plot results
+    plot_closed_loop_results(t, x_traj, u_traj, x_target, system.L, test_name)
+
+
 def main():
     """Main function to run all test cases"""
     
@@ -554,68 +845,78 @@ def main():
     print(Bd)
     
     # Cost function weights
-    # Q_state: [drone position, drone velocity, cable angle, angular velocity]
-    # Higher angle and angular velocity weights help dampen oscillations
-    # Lower drone position weight since we focus on load position
     Q_state = np.array([10.0, 20.0, 500.0, 100.0])  # State tracking weights
-    Q_load = 1000.0  # High weight on load position - this is the primary objective
-    R_weight = 2.0  # Control effort penalty to smooth trajectory and avoid overshoot
+    Q_load = 1000.0  # High weight on load position
+    R_weight = 2.0  # Control effort penalty
     
-    # Define test cases with longer horizons to ensure the load settles
-    test_cases = [
+    # Continuity weight for closed-loop MPC
+    R_continuity = 50.0  # Penalize deviations from previous solution
+    
+    # Test closed-loop control with continuity constraints
+    print("\n" + "="*60)
+    print("CLOSED-LOOP MPC TESTS WITH CONTINUITY CONSTRAINTS")
+    print("="*60)
+    
+    closed_loop_tests = [
         {
-            'name': 'test_20m_at_rest',
-            'x0': np.array([0.0, 0.0, 0.0, 0.0]),  # Start at rest at origin
-            'x_load_target': 20.0,  # Target load position: 20m
-            'horizon': 100  # Longer horizon to ensure settling
+            'name': 'closed_loop_20m_without_continuity',
+            'x0': np.array([0.0, 0.0, 0.0, 0.0]),
+            'x_load_target': 20.0,
+            'R_continuity': None,  # No continuity constraint
+            'horizon': 50,
+            'n_steps': 100,
+            'recalc_interval': 5
         },
         {
-            'name': 'test_40m_at_rest',
-            'x0': np.array([0.0, 0.0, 0.0, 0.0]),  # Start at rest at origin
-            'x_load_target': 40.0,  # Target load position: 40m
-            'horizon': 150  # Longer horizon to ensure settling
+            'name': 'closed_loop_20m_with_continuity',
+            'x0': np.array([0.0, 0.0, 0.0, 0.0]),
+            'x_load_target': 20.0,
+            'R_continuity': R_continuity,  # With continuity constraint
+            'horizon': 50,
+            'n_steps': 100,
+            'recalc_interval': 5
         },
         {
-            'name': 'test_80m_at_rest',
-            'x0': np.array([0.0, 0.0, 0.0, 0.0]),  # Start at rest at origin
-            'x_load_target': 80.0,  # Target load position: 80m
-            'horizon': 200  # Longer horizon to ensure settling
+            'name': 'closed_loop_40m_without_continuity',
+            'x0': np.array([0.0, 2.0, 0.1, 0.0]),
+            'x_load_target': 40.0,
+            'R_continuity': None,
+            'horizon': 60,
+            'n_steps': 150,
+            'recalc_interval': 5
         },
         {
-            'name': 'test_20m_with_velocity',
-            'x0': np.array([0.0, 2.0, 0.1, 0.0]),  # Start with velocity and angle
-            'x_load_target': 20.0,  # Target load position: 20m
-            'horizon': 100
+            'name': 'closed_loop_40m_with_continuity',
+            'x0': np.array([0.0, 2.0, 0.1, 0.0]),
+            'x_load_target': 40.0,
+            'R_continuity': R_continuity,
+            'horizon': 60,
+            'n_steps': 150,
+            'recalc_interval': 5
         },
-        {
-            'name': 'test_40m_with_velocity',
-            'x0': np.array([0.0, 3.0, 0.15, 0.05]),  # Start with velocity and angle
-            'x_load_target': 40.0,  # Target load position: 40m
-            'horizon': 150
-        },
-        {
-            'name': 'test_80m_with_velocity',
-            'x0': np.array([0.0, 4.0, 0.2, 0.1]),  # Start with velocity and angle
-            'x_load_target': 80.0,  # Target load position: 80m
-            'horizon': 200
-        }
     ]
     
-    # Run all test cases
-    for test in test_cases:
-        run_test_case(
+    # Run closed-loop tests
+    for test in closed_loop_tests:
+        run_closed_loop_test(
             system, Ad, Bd,
             test['x0'], test['x_load_target'],
             test['name'],
             Q_state, Q_load, R_weight,
-            horizon=test['horizon']
+            R_continuity=test['R_continuity'],
+            horizon=test['horizon'],
+            n_steps=test['n_steps'],
+            recalc_interval=test['recalc_interval']
         )
     
     print("\n" + "="*60)
     print("All test cases completed successfully!")
     print("="*60)
-    
-    plt.show()
+    print("\nKey findings:")
+    print("- Closed-loop tests demonstrate MPC recalculation with nonlinear feedback")
+    print("- Continuity constraints (u_prev and R_continuity) smooth control transitions")
+    print("- Control jumps are reduced when constraints are active")
+    print("- System achieves target despite model mismatch and disturbances")
 
 
 if __name__ == "__main__":

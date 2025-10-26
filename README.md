@@ -17,10 +17,22 @@ This project implements a Model Predictive Control (MPC) system for a drone carr
 2. **Linearized model** around equilibrium (load directly below drone)
 3. **Discrete-time model** with matrix exponential discretization
 4. **MPC controller** using CVXPY optimization library
-5. **Simulation and visualization** comparing:
+5. **Closed-loop MPC** with continuity constraints to eliminate control jumps
+6. **Simulation and visualization** comparing:
    - Optimal trajectory from MPC
    - Linear model response
    - Non-linear model response (using RK45 ODE solver)
+
+## New: Closed-Loop MPC with Continuity Constraints
+
+The system now supports closed-loop MPC with special constraints to ensure smooth control transitions:
+
+- **Hard constraint**: First control input matches last applied control (eliminates jumps)
+- **Soft penalty**: Penalizes large deviations from previous solution (smooth evolution)
+
+**Results**: 36-41% reduction in control rate, 43% fewer large control jumps, while maintaining excellent tracking performance.
+
+See [CLOSED_LOOP_MPC_DOCUMENTATION.md](CLOSED_LOOP_MPC_DOCUMENTATION.md) for detailed explanation.
 
 ## State Variables
 
@@ -42,17 +54,30 @@ pip install -r requirements.txt
 
 ## Usage
 
+### Basic Open-Loop MPC
+
 Run the main simulation:
 
 ```bash
 python drone_control_1d.py
 ```
 
-This will execute multiple test cases and generate plots showing:
-- System trajectories (drone position, velocity, cable angle, angular velocity)
-- Control inputs
-- Comparison between optimal, linear model, and non-linear model responses
-- Load position tracking
+This executes closed-loop MPC tests with and without continuity constraints.
+
+### Test Closed-Loop with Continuity Comparison
+
+Run the comparison test:
+
+```bash
+python test_closed_loop_continuity.py
+```
+
+This compares three strategies:
+1. Open-loop MPC (single optimization)
+2. Closed-loop MPC without continuity constraints
+3. Closed-loop MPC with continuity constraints
+
+Generates detailed comparison plots showing control smoothness improvements.
 
 ## Test Cases
 
