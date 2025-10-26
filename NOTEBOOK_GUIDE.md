@@ -113,9 +113,15 @@ Le notebook affiche:
 
 ## Exemple de Sortie
 
-![Exemple de sortie du notebook](notebook_demo_output.png)
+Lorsque vous exécutez le notebook avec les paramètres par défaut, vous obtiendrez un graphique composite montrant:
 
-*Figure: Réponse du système pour le scénario par défaut (position=0m, vitesse=10m/s, angle=-30°, cible=10m)*
+- **Ligne verte**: Réponse du système linéaire
+- **Ligne rouge**: Réponse du système non-linéaire
+- **Ligne noire pointillée**: Valeur cible
+
+Le graphique comprend 6 sous-graphiques montrant la position de la charge, la position du drone, la vitesse, l'angle du câble, la vitesse angulaire et la commande de contrôle.
+
+*Note: Exécutez le notebook pour générer les graphiques avec vos propres paramètres*
 
 ## Interprétation des Résultats
 
