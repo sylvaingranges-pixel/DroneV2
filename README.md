@@ -54,6 +54,22 @@ pip install -r requirements.txt
 
 ## Usage
 
+### Interactive Parameter Tuning (Jupyter Notebook)
+
+**NEW**: Launch the interactive Jupyter notebook to tune MPC parameters:
+
+```bash
+jupyter notebook interactive_drone_tuning.ipynb
+```
+
+This notebook provides:
+- **All parameters in one place**: simulation step, horizon, initial conditions, cost weights, terminal weights
+- **Interactive widgets**: adjust parameters with sliders and see results immediately
+- **Predefined scenario**: Initial conditions (position=0m, velocity=10m/s, load angle=-30°, angular velocity=0) with target load position at 10m
+- **Visual comparison**: side-by-side plots of linear and non-linear system responses
+
+See [NOTEBOOK_GUIDE.md](NOTEBOOK_GUIDE.md) for detailed usage instructions and parameter tuning guide.
+
 ### Basic Open-Loop MPC
 
 Run the main simulation:

@@ -4,3 +4,5 @@ matplotlib>=3.4.0
 cvxpy>=1.2.0
 clarabel>=0.5.0
 pandas>=2.0.0
+jupyter>=1.0.0
+ipywidgets>=8.0.0
